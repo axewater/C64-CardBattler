@@ -120,18 +120,18 @@ void enemy_execute_action(void) {
         case INTENT_ATTACK:
             player_take_damage(current_enemy.intent_value);
 
-            /* Add damage effects on player - show damage in center top */
+            /* Add damage effects on player - full screen flash! */
+            effects_add_screen_flash(COLOR_RED);
             effects_add_damage(18, 1, current_enemy.intent_value, 0);
             effects_add_shake(1, 0, 35, 1);
-            effects_add_flash(1, 0, 35, 1, COLOR_RED);
             break;
 
         case INTENT_DEFEND:
             enemy_gain_block(current_enemy.intent_value);
 
-            /* Add block effects on enemy */
+            /* Add block effects on enemy - blue screen flash */
+            effects_add_screen_flash(COLOR_BLUE);
             effects_add_damage(17, 4, current_enemy.intent_value, 1);
-            effects_add_flash(13, 4, 15, 1, COLOR_LIGHTBLUE);
             break;
 
         default:

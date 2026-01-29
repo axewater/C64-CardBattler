@@ -86,14 +86,14 @@ void combat_player_play_card(uint8_t hand_index) {
                 if (current_enemy.hp <= current_enemy.max_hp / 2) {
                     damage += 10;
                     /* Extra bright flash for execute bonus */
-                    effects_add_flash(15, 3, 10, 3, COLOR_LIGHTRED);
+                    effects_add_screen_flash(COLOR_ORANGE);
                 }
             }
 
             enemy_take_damage(damage);
 
-            /* Add attack effects */
-            effects_add_flash(15, 3, 10, 3, COLOR_RED);
+            /* Add attack effects - full screen flash! */
+            effects_add_screen_flash(COLOR_RED);
             effects_add_damage(17, 4, damage, 1);
 
             strcpy(combat_log, "You attack for ");
@@ -104,8 +104,8 @@ void combat_player_play_card(uint8_t hand_index) {
             if (card->block > 0) {
                 player_gain_block(card->block);
 
-                /* Add block effects */
-                effects_add_flash(27, 0, 10, 1, COLOR_LIGHTBLUE);
+                /* Add block effects - cyan screen flash */
+                effects_add_screen_flash(COLOR_CYAN);
                 effects_add_damage(32, 0, card->block, 0);
 
                 strcpy(combat_log, "You gain block!");
@@ -116,8 +116,8 @@ void combat_player_play_card(uint8_t hand_index) {
                 deck_draw_card();
                 deck_draw_card();
 
-                /* Flash hand area */
-                effects_add_flash(1, 11, 38, 10, COLOR_YELLOW);
+                /* Flash screen yellow for card draw */
+                effects_add_screen_flash(COLOR_YELLOW);
 
                 strcpy(combat_log, "You draw 2 cards!");
             }
@@ -126,8 +126,8 @@ void combat_player_play_card(uint8_t hand_index) {
             if (card->effects & EFFECT_ENERGY) {
                 player.energy += 2;
 
-                /* Flash energy stat */
-                effects_add_flash(15, 0, 13, 1, COLOR_CYAN);
+                /* Flash screen green for energy */
+                effects_add_screen_flash(COLOR_GREEN);
 
                 strcpy(combat_log, "You gain energy!");
             }
@@ -203,6 +203,7 @@ void combat_end_turn(void) {
 
     /* Animate effects and wait for keypress */
     while (effects_active_count() > 0) {
+        ui_wait_frame();  /* Wait for next frame (~60 FPS) */
         effects_update();
         effects_render();
     }
@@ -322,6 +323,14 @@ void combat_run(void) {
 
         if (key >= '1' && key <= '5') {
             combat_player_play_card(key - '1');
+
+            /* Let effects animate before redrawing */
+            while (effects_active_count() > 0) {
+                ui_wait_frame();  /* Wait for next frame (~60 FPS) */
+                effects_update();
+                effects_render();
+            }
+
             combat_render();
         } else if (key == 'e' || key == 'E') {
             combat_end_turn();

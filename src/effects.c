@@ -10,6 +10,14 @@ static Effect effects[MAX_ACTIVE_EFFECTS];
 static uint8_t shake_backup[40];
 static uint8_t shake_backup_valid = 0;
 
+/* Saved color backup for flash effect */
+static uint8_t flash_color_backup[40 * 3]; /* Max 40 width * 3 height */
+static uint8_t flash_backup_valid = 0;
+
+/* Saved screen colors for full-screen flash */
+static uint8_t saved_border_color = 0;
+static uint8_t saved_bg_color = 0;
+
 /* Initialize effects system */
 void effects_init(void) {
     uint8_t i;
@@ -17,6 +25,7 @@ void effects_init(void) {
         effects[i].type = EFFECT_TYPE_NONE;
     }
     shake_backup_valid = 0;
+    flash_backup_valid = 0;
 }
 
 /* Get number of active effects */
@@ -68,6 +77,26 @@ void effects_update(void) {
                 shake_backup_valid = 0;
             }
 
+            /* Restore flash colors if needed */
+            if (effects[i].type == EFFECT_TYPE_FLASH && flash_backup_valid) {
+                uint8_t j, k;
+                uint16_t offset;
+                uint8_t backup_idx = 0;
+                for (j = 0; j < effects[i].height && j < 3; j++) {
+                    offset = (uint16_t)(effects[i].y + j) * SCREEN_WIDTH + effects[i].x;
+                    for (k = 0; k < effects[i].width && k < 40; k++) {
+                        COLOR_MEM[offset + k] = flash_color_backup[backup_idx++];
+                    }
+                }
+                flash_backup_valid = 0;
+            }
+
+            /* Restore screen colors for full-screen flash */
+            if (effects[i].type == EFFECT_TYPE_SCREEN_FLASH) {
+                *VIC_BORDER = saved_border_color;
+                *VIC_BACKGROUND = saved_bg_color;
+            }
+
             effects[i].type = EFFECT_TYPE_NONE;
         }
     }
@@ -86,12 +115,32 @@ void effects_render(void) {
         switch (effects[i].type) {
             case EFFECT_TYPE_FLASH:
                 /* Flash color in region */
-                for (j = 0; j < effects[i].height; j++) {
-                    offset = (uint16_t)(effects[i].y + j) * SCREEN_WIDTH + effects[i].x;
-                    for (k = 0; k < effects[i].width; k++) {
-                        /* Alternate between normal and flash color */
-                        if ((effects[i].timer & 1) == 0) {
-                            COLOR_MEM[offset + k] = effects[i].param1;
+                if (!flash_backup_valid) {
+                    /* First frame - backup original colors */
+                    uint8_t backup_idx = 0;
+                    for (j = 0; j < effects[i].height && j < 3; j++) {
+                        offset = (uint16_t)(effects[i].y + j) * SCREEN_WIDTH + effects[i].x;
+                        for (k = 0; k < effects[i].width && k < 40; k++) {
+                            flash_color_backup[backup_idx++] = COLOR_MEM[offset + k];
+                        }
+                    }
+                    flash_backup_valid = 1;
+                }
+
+                /* Toggle between flash color and original */
+                {
+                    uint8_t backup_idx = 0;
+                    for (j = 0; j < effects[i].height && j < 3; j++) {
+                        offset = (uint16_t)(effects[i].y + j) * SCREEN_WIDTH + effects[i].x;
+                        for (k = 0; k < effects[i].width && k < 40; k++) {
+                            if ((effects[i].timer & 1) == 0) {
+                                /* Even frames: flash color */
+                                COLOR_MEM[offset + k] = effects[i].param1;
+                            } else {
+                                /* Odd frames: restore original */
+                                COLOR_MEM[offset + k] = flash_color_backup[backup_idx];
+                            }
+                            backup_idx++;
                         }
                     }
                 }
@@ -135,6 +184,26 @@ void effects_render(void) {
             case EFFECT_TYPE_HIGHLIGHT:
                 /* Card highlight - handled in card rendering */
                 break;
+
+            case EFFECT_TYPE_SCREEN_FLASH:
+                /* Full-screen flash - change background and border */
+                if (effects[i].timer == effects[i].param2) {
+                    /* First frame - save original colors */
+                    saved_border_color = *VIC_BORDER;
+                    saved_bg_color = *VIC_BACKGROUND;
+                }
+
+                /* Toggle between flash color and original */
+                if ((effects[i].timer & 1) == 0) {
+                    /* Even frames: flash color */
+                    *VIC_BORDER = effects[i].param1;
+                    *VIC_BACKGROUND = effects[i].param1;
+                } else {
+                    /* Odd frames: restore original */
+                    *VIC_BORDER = saved_border_color;
+                    *VIC_BACKGROUND = saved_bg_color;
+                }
+                break;
         }
     }
 }
@@ -149,7 +218,7 @@ void effects_add_flash(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t color
     effects[slot].y = y;
     effects[slot].width = w;
     effects[slot].height = h;
-    effects[slot].timer = 6; /* 6 frames */
+    effects[slot].timer = 20; /* 20 frames (~0.33 seconds) */
     effects[slot].param1 = color;
     effects[slot].param2 = 0;
 }
@@ -164,8 +233,8 @@ void effects_add_shake(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
     effects[slot].y = y;
     effects[slot].width = w;
     effects[slot].height = h;
-    effects[slot].timer = 6; /* 6 frames */
-    effects[slot].param1 = 6; /* Save initial timer for backup */
+    effects[slot].timer = 20; /* 20 frames (~0.33 seconds) */
+    effects[slot].param1 = 20; /* Save initial timer for backup */
     effects[slot].param2 = 0;
 }
 
@@ -188,7 +257,7 @@ void effects_add_damage(uint8_t x, uint8_t y, uint8_t value, uint8_t to_enemy) {
     effects[slot].y = y;
     effects[slot].width = 0;
     effects[slot].height = 0;
-    effects[slot].timer = 30; /* 30 frames (~0.5 seconds) */
+    effects[slot].timer = 20; /* 20 frames (~0.33 seconds) - matches flash duration */
     effects[slot].param1 = color;
     effects[slot].param2 = value;
 }
@@ -217,4 +286,19 @@ uint8_t effects_get_highlighted_card(void) {
         }
     }
     return 0xFF; /* No highlight active */
+}
+
+/* Add full-screen flash effect */
+void effects_add_screen_flash(uint8_t color) {
+    uint8_t slot = effects_find_free_slot();
+    if (slot == 0xFF) return;
+
+    effects[slot].type = EFFECT_TYPE_SCREEN_FLASH;
+    effects[slot].x = 0;
+    effects[slot].y = 0;
+    effects[slot].width = 0;
+    effects[slot].height = 0;
+    effects[slot].timer = 20; /* 20 frames (~0.33 seconds) */
+    effects[slot].param1 = color;
+    effects[slot].param2 = 20; /* Save initial timer */
 }

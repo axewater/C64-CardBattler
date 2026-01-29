@@ -9,6 +9,11 @@
 #define SCREEN_WIDTH  40
 #define SCREEN_HEIGHT 25
 
+/* VIC-II Registers */
+#define VIC_RASTER     ((uint8_t*)0xD012)
+#define VIC_BORDER     ((uint8_t*)0xD020)
+#define VIC_BACKGROUND ((uint8_t*)0xD021)
+
 /* C64 Colors - use system defines from c64.h via conio.h */
 /* No need to redefine - they're already in the system headers */
 
@@ -42,5 +47,6 @@ void ui_color_region(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t color);
 void ui_draw_card_frame(uint8_t x, uint8_t y, uint8_t card_id, uint8_t type,
                        uint8_t attack, uint8_t block, uint8_t cost,
                        uint8_t can_afford, uint8_t selected);
+void ui_wait_frame(void);
 
 #endif /* UI_H */

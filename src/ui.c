@@ -1,7 +1,11 @@
 #include <conio.h>
 #include <string.h>
+#include <c64.h>
 #include "ui.h"
 #include "music.h"
+
+/* External waitvsync function from cc65 library */
+extern void waitvsync(void);
 
 /* Screen position to memory offset */
 static uint16_t screen_offset(uint8_t x, uint8_t y) {
@@ -97,6 +101,11 @@ void ui_set_char(uint8_t x, uint8_t y, uint8_t ch) {
 
 void ui_set_color(uint8_t x, uint8_t y, uint8_t color) {
     COLOR_MEM[screen_offset(x, y)] = color;
+}
+
+void ui_wait_frame(void) {
+    /* Use built-in waitvsync from cc65 library */
+    waitvsync();
 }
 
 void ui_wait_key(void) {
