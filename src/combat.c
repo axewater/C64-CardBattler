@@ -4,6 +4,7 @@
 #include "deck.h"
 #include "cards.h"
 #include "ui.h"
+#include "effects.h"
 #include <conio.h>
 #include <string.h>
 
@@ -25,6 +26,9 @@ void combat_init(uint8_t enemy_id) {
     /* Draw starting hand */
     deck_draw_to_hand_size(5);
 
+    /* Initialize effects system */
+    effects_init();
+
     combat_state = COMBAT_PLAYER_TURN;
     strcpy(combat_log, "Combat begins!");
 }
@@ -40,6 +44,9 @@ void combat_start_turn(void) {
 
     /* Draw new hand */
     deck_draw_to_hand_size(5);
+
+    /* Clear combat log for new turn */
+    strcpy(combat_log, "Your turn!");
 
     combat_state = COMBAT_PLAYER_TURN;
 }
@@ -66,6 +73,9 @@ void combat_player_play_card(uint8_t hand_index) {
     /* Spend energy */
     player_spend_energy(card->cost);
 
+    /* Highlight the played card */
+    effects_add_card_highlight(hand_index);
+
     /* Apply card effects */
     switch (card->type) {
         case CARD_TYPE_ATTACK:
@@ -75,10 +85,17 @@ void combat_player_play_card(uint8_t hand_index) {
             if (card->effects & EFFECT_EXECUTE) {
                 if (current_enemy.hp <= current_enemy.max_hp / 2) {
                     damage += 10;
+                    /* Extra bright flash for execute bonus */
+                    effects_add_flash(15, 3, 10, 3, COLOR_LIGHTRED);
                 }
             }
 
             enemy_take_damage(damage);
+
+            /* Add attack effects */
+            effects_add_flash(15, 3, 10, 3, COLOR_RED);
+            effects_add_damage(17, 4, damage, 1);
+
             strcpy(combat_log, "You attack for ");
             /* Would append number here */
             break;
@@ -86,6 +103,11 @@ void combat_player_play_card(uint8_t hand_index) {
         case CARD_TYPE_SKILL:
             if (card->block > 0) {
                 player_gain_block(card->block);
+
+                /* Add block effects */
+                effects_add_flash(27, 0, 10, 1, COLOR_LIGHTBLUE);
+                effects_add_damage(32, 0, card->block, 0);
+
                 strcpy(combat_log, "You gain block!");
             }
 
@@ -93,12 +115,20 @@ void combat_player_play_card(uint8_t hand_index) {
             if (card->effects & EFFECT_DRAW) {
                 deck_draw_card();
                 deck_draw_card();
+
+                /* Flash hand area */
+                effects_add_flash(1, 11, 38, 10, COLOR_YELLOW);
+
                 strcpy(combat_log, "You draw 2 cards!");
             }
 
             /* ENERGY effect */
             if (card->effects & EFFECT_ENERGY) {
                 player.energy += 2;
+
+                /* Flash energy stat */
+                effects_add_flash(15, 0, 13, 1, COLOR_CYAN);
+
                 strcpy(combat_log, "You gain energy!");
             }
             break;
@@ -118,17 +148,77 @@ void combat_player_play_card(uint8_t hand_index) {
 
 /* End player turn */
 void combat_end_turn(void) {
+    uint8_t hp_before;
+    uint8_t damage_dealt;
+    uint8_t i;
+    char num_buf[4];
+
     /* Enemy executes action */
     combat_state = COMBAT_ENEMY_TURN;
+
+    /* Store HP before enemy acts */
+    hp_before = player.hp;
 
     /* Enemy acts */
     enemy_execute_action();
 
+    /* Update combat log with results */
+    if (current_enemy.intent == INTENT_ATTACK) {
+        damage_dealt = hp_before - player.hp;
+
+        /* Build message: "Enemy attacks for X!" */
+        strcpy(combat_log, "Enemy attacks for ");
+
+        /* Convert damage to string and append */
+        i = 0;
+        if (damage_dealt >= 10) {
+            num_buf[i++] = '0' + (damage_dealt / 10);
+            num_buf[i++] = '0' + (damage_dealt % 10);
+        } else {
+            num_buf[i++] = '0' + damage_dealt;
+        }
+        num_buf[i++] = '!';
+        num_buf[i] = '\0';
+
+        strcat(combat_log, num_buf);
+    } else if (current_enemy.intent == INTENT_DEFEND) {
+        /* Build message: "Enemy gains X block!" */
+        strcpy(combat_log, "Enemy gains ");
+
+        i = 0;
+        if (current_enemy.intent_value >= 10) {
+            num_buf[i++] = '0' + (current_enemy.intent_value / 10);
+            num_buf[i++] = '0' + (current_enemy.intent_value % 10);
+        } else {
+            num_buf[i++] = '0' + current_enemy.intent_value;
+        }
+        num_buf[i] = '\0';
+
+        strcat(combat_log, num_buf);
+        strcat(combat_log, " block!");
+    }
+
+    /* Re-render to show enemy action results */
+    combat_render();
+
+    /* Animate effects and wait for keypress */
+    while (effects_active_count() > 0) {
+        effects_update();
+        effects_render();
+    }
+
     /* Check if player is dead */
     if (player.hp == 0) {
         combat_state = COMBAT_DEFEAT;
+        strcpy(combat_log, "You have been defeated!");
+        combat_render();
+        ui_wait_key();
         return;
     }
+
+    /* Show "Press any key" message */
+    ui_print_at_color(1, 22, "Press any key to continue...", COLOR_YELLOW);
+    ui_wait_key();
 
     /* Start new turn */
     combat_start_turn();
@@ -143,40 +233,41 @@ CombatState combat_get_state(void) {
 void combat_render(void) {
     uint8_t i;
     const Card* card;
-    char buf[40];
 
     ui_clear_screen();
 
-    /* Status bar */
+    /* Status bar - clear and redraw with consistent colors */
+    ui_fill_rect(0, 0, 40, 1, ' ', COLOR_BLACK);
+
     ui_print_at_color(1, 0, "HP:", COLOR_RED);
-    ui_print_number(5, 0, player.hp);
-    ui_print_at(7, 0, "/");
-    ui_print_number(8, 0, player.max_hp);
+    ui_print_number_at_color(5, 0, player.hp, COLOR_RED);
+    ui_print_at_color(7, 0, "/", COLOR_RED);
+    ui_print_number_at_color(8, 0, player.max_hp, COLOR_RED);
 
     ui_print_at_color(15, 0, "EN:", COLOR_CYAN);
-    ui_print_number(19, 0, player.energy);
-    ui_print_at(21, 0, "/");
-    ui_print_number(22, 0, player.max_energy);
+    ui_print_number_at_color(19, 0, player.energy, COLOR_CYAN);
+    ui_print_at_color(21, 0, "/", COLOR_CYAN);
+    ui_print_number_at_color(22, 0, player.max_energy, COLOR_CYAN);
 
     ui_print_at_color(27, 0, "BLK:", COLOR_LIGHTBLUE);
-    ui_print_number(32, 0, player.block);
+    ui_print_number_at_color(32, 0, player.block, COLOR_LIGHTBLUE);
 
     /* Enemy display */
     ui_print_at_color(15, 3, enemy_get_name(current_enemy.id), COLOR_YELLOW);
 
     ui_print_at_color(13, 4, "HP:", COLOR_RED);
-    ui_print_number(17, 4, current_enemy.hp);
-    ui_print_at(19, 4, "/");
-    ui_print_number(20, 4, current_enemy.max_hp);
+    ui_print_number_at_color(17, 4, current_enemy.hp, COLOR_RED);
+    ui_print_at_color(19, 4, "/", COLOR_RED);
+    ui_print_number_at_color(20, 4, current_enemy.max_hp, COLOR_RED);
 
     /* Enemy intent */
     ui_print_at_color(12, 5, "INTENT: ", COLOR_WHITE);
     if (current_enemy.intent == INTENT_ATTACK) {
         ui_print_at_color(20, 5, "ATTACK ", COLOR_RED);
-        ui_print_number(27, 5, current_enemy.intent_value);
+        ui_print_number_at_color(27, 5, current_enemy.intent_value, COLOR_RED);
     } else if (current_enemy.intent == INTENT_DEFEND) {
         ui_print_at_color(20, 5, "DEFEND ", COLOR_LIGHTBLUE);
-        ui_print_number(27, 5, current_enemy.intent_value);
+        ui_print_number_at_color(27, 5, current_enemy.intent_value, COLOR_LIGHTBLUE);
     }
 
     /* Combat log */
@@ -185,31 +276,29 @@ void combat_render(void) {
     /* Hand */
     ui_print_at_color(1, 11, "HAND:", COLOR_YELLOW);
 
-    for (i = 0; i < hand_size && i < 5; i++) {
-        card = card_get(hand[i]);
+    /* Draw cards horizontally with frames (5 cards max, 7 chars wide each) */
+    {
+        uint8_t highlighted = effects_get_highlighted_card();
 
-        /* Card number */
-        ui_print_at_color(1, 13 + i * 2, "[", COLOR_WHITE);
-        ui_print_number(2, 13 + i * 2, i + 1);
-        ui_print_at_color(3, 13 + i * 2, "] ", COLOR_WHITE);
+        for (i = 0; i < hand_size && i < 5; i++) {
+            uint8_t card_x = 2 + i * 8; /* 7 chars + 1 space */
+            uint8_t can_afford;
+            uint8_t is_selected;
 
-        /* Card name */
-        ui_print_at_color(5, 13 + i * 2, card_get_name(card->id), COLOR_YELLOW);
+            card = card_get(hand[i]);
+            can_afford = player_can_play_card(hand[i]);
+            is_selected = (highlighted == i);
 
-        /* Card stats */
-        if (card->attack > 0) {
-            ui_print_at_color(20, 13 + i * 2, "ATK:", COLOR_RED);
-            ui_print_number(24, 13 + i * 2, card->attack);
+            /* Draw card frame */
+            ui_draw_card_frame(card_x, 13, card->id, card->type,
+                              card->attack, card->block, card->cost,
+                              can_afford, is_selected);
+
+            /* Draw selection number below card */
+            ui_print_at_color(card_x + 3, 17, "[", COLOR_WHITE);
+            ui_print_number(card_x + 4, 17, i + 1);
+            ui_print_at_color(card_x + 5, 17, "]", COLOR_WHITE);
         }
-        if (card->block > 0) {
-            ui_print_at_color(27, 13 + i * 2, "BLK:", COLOR_LIGHTBLUE);
-            ui_print_number(31, 13 + i * 2, card->block);
-        }
-
-        /* Cost */
-        ui_print_at_color(34, 13 + i * 2, "[$", COLOR_CYAN);
-        ui_print_number(36, 13 + i * 2, card->cost);
-        ui_print_at_color(38, 13 + i * 2, "]", COLOR_CYAN);
     }
 
     /* Controls */
@@ -223,6 +312,12 @@ void combat_run(void) {
     combat_render();
 
     while (combat_state == COMBAT_PLAYER_TURN) {
+        /* Update and render effects */
+        effects_update();
+        if (effects_active_count() > 0) {
+            effects_render();
+        }
+
         key = ui_get_key();
 
         if (key >= '1' && key <= '5') {

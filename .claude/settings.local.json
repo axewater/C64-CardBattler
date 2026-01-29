@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "WebSearch",
+      "Bash(/c/bin/GnuWin32/bin/make.exe)",
+      "Bash(/c/bin/GnuWin32/bin/make.exe:*)",
+      "Bash(git init:*)"
+    ]
+  }
+}

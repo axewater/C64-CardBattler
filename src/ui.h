@@ -21,6 +21,9 @@
 #define PETSCII_CORNER_TR 73  /* top-right corner */
 #define PETSCII_CORNER_BL 74  /* bottom-left corner */
 #define PETSCII_CORNER_BR 75  /* bottom-right corner */
+#define PETSCII_SOLID     160 /* Solid block */
+#define PETSCII_BANG      33  /* ! for execute */
+#define PETSCII_STAR      42  /* * for sparkles */
 
 /* UI Functions */
 void ui_init(void);
@@ -34,5 +37,10 @@ void ui_set_char(uint8_t x, uint8_t y, uint8_t ch);
 void ui_set_color(uint8_t x, uint8_t y, uint8_t color);
 void ui_wait_key(void);
 uint8_t ui_get_key(void);
+void ui_print_number_at_color(uint8_t x, uint8_t y, uint8_t num, uint8_t color);
+void ui_color_region(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t color);
+void ui_draw_card_frame(uint8_t x, uint8_t y, uint8_t card_id, uint8_t type,
+                       uint8_t attack, uint8_t block, uint8_t cost,
+                       uint8_t can_afford, uint8_t selected);
 
 #endif /* UI_H */
