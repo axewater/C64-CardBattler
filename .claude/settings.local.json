@@ -5,7 +5,10 @@
       "WebSearch",
       "Bash(/c/bin/GnuWin32/bin/make.exe)",
       "Bash(/c/bin/GnuWin32/bin/make.exe:*)",
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(git push)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

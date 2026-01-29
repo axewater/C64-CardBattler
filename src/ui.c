@@ -1,6 +1,7 @@
 #include <conio.h>
 #include <string.h>
 #include "ui.h"
+#include "music.h"
 
 /* Screen position to memory offset */
 static uint16_t screen_offset(uint8_t x, uint8_t y) {
@@ -100,7 +101,7 @@ void ui_set_color(uint8_t x, uint8_t y, uint8_t color) {
 
 void ui_wait_key(void) {
     while (!kbhit()) {
-        /* Wait for keypress */
+        music_update();  /* Keep music playing while waiting */
     }
     cgetc();
 }

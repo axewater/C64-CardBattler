@@ -30,7 +30,7 @@ cd C:\Scripts\c64\cardbattler
 ### Build Output
 - **Binary**: `build/cardbattle.prg` (C64 executable)
 - **Map File**: `build/cardbattle.map` (memory layout and symbols)
-- **Memory Budget**: ~13.2 KB used of 38 KB available
+- **Memory Budget**: ~15 KB used of 38 KB available
 
 ## Project Structure
 
@@ -44,7 +44,8 @@ src/
 ├── player.c/h       # Player stats (HP, energy, block, gold)
 ├── enemy.c/h        # Enemy AI and stats (3 enemy types)
 ├── encounter.c/h    # Encounter generation and progression
-├── effects.c/h      # Visual effects system (NEW)
+├── effects.c/h      # Visual effects system
+├── music.c/h        # SID music system with smart gate handling
 ├── ui.c/h           # Screen rendering and PETSCII graphics
 ├── persistence.c/h  # Save/load (basic implementation)
 └── random.c/h       # PRNG for procedural generation
@@ -67,7 +68,7 @@ build/               # Compiled objects and final .prg
 4. **Enemy Turn**: Execute enemy intent (attack/defend)
 5. **Victory/Defeat**: Transition to reward or game over
 
-### Effects System (NEW)
+### Effects System
 - **Max 4 simultaneous effects** (prevent queue overflow)
 - **Effect Types**:
   - `FLASH`: Color pulse (6 frames)
@@ -75,6 +76,18 @@ build/               # Compiled objects and final .prg
   - `DAMAGE_NUM`: Popup number (8 frames)
   - `HIGHLIGHT`: Card selection flash (4 frames)
 - **Integration**: Effects update/render in combat loop
+
+### Music System
+- **SID chip control**: Direct register manipulation for 3-voice synthesis
+- **Smart gate handling**: Eliminates clicking artifacts by using legato playing for note-to-note transitions
+- **Two tracks**:
+  - `TRACK_MENU`: Dark A minor ambient theme with sparse melody and deep bass punctuation
+  - `TRACK_COMBAT`: Epic D minor battle theme with dense melodic motion and heroic intervals
+- **Voice assignments**:
+  - Voice 1 (Triangle): Ethereal melody / Dense heroic line
+  - Voice 2 (Pulse): Sustained pads / Harmonic countermelody
+  - Voice 3 (Sawtooth): Deep percussive bass foundation
+- **Gate optimization**: Only retriggers when coming from rest or for bass percussion, preventing audible pops
 
 ### Memory Layout
 - **Screen**: `$0400-$07E7` (1000 bytes, 40x25 chars)
@@ -102,6 +115,14 @@ build/               # Compiled objects and final .prg
 2. **Add Name**: `enemy_names[]` array
 3. **Define AI**: Implement in `enemy_calculate_intent()`
 4. **Update Count**: Increment `MAX_ENEMY_TYPES`
+
+### Add a New Music Track
+1. **Define Track ID**: Add to `music.h` (e.g., `#define TRACK_BOSS 2`)
+2. **Create Note Patterns**: Define arrays in `music.c` for each voice (e.g., `boss_voice1_notes[]`)
+3. **Create Pattern Structs**: Define `Pattern` structures wrapping note arrays
+4. **Create Track Struct**: Define `Track` structure referencing voice patterns
+5. **Update `music_play()`**: Add track selection case in `music.c`
+6. **Integrate**: Call `music_play(TRACK_ID)` in appropriate game state
 
 ## Development Tips
 
@@ -164,16 +185,7 @@ build/               # Compiled objects and final .prg
 ### Debug Build (if needed)
 Remove `-O -Or -Cl` and add `-g` for debug symbols (increases size).
 
-## Testing Checklist
 
-After making changes:
-- [ ] `make clean && make` builds without errors
-- [ ] Memory usage < 20 KB (check map file)
-- [ ] Game loads in VICE (`make run`)
-- [ ] Can complete a full combat encounter
-- [ ] All 15 card types display correctly
-- [ ] Visual effects trigger appropriately
-- [ ] No crashes or hangs during gameplay
 
 ## Architecture Decisions
 
@@ -189,21 +201,11 @@ Better use of 40-char screen width. Vertical layout wasted space; horizontal fit
 ### Why Frame-Based Animation?
 Effects update each frame in the input loop (non-blocking). Allows gameplay to continue while effects animate.
 
-## Resources
+### Why Smart Gate Handling in Music?
+SID chip generates audible clicks/pops when gate bit is cleared and immediately re-set. Original implementation retriggered on every note change, causing crackling. Smart gate handling uses:
+- **Legato playing**: For note-to-note transitions on melody/harmony voices, only update frequency registers without touching the gate bit
+- **Selective retriggering**: Only retrigger gate when (1) coming from rest (gate was off), or (2) voice 3 bass for percussive effect
+- **State tracking**: Track `gate_active` and `last_note` per voice to determine when retriggering is needed
+- **Result**: Smooth, professional sound quality with natural ADSR envelope transitions
 
-- **cc65 Docs**: https://cc65.github.io/doc/
-- **C64 Memory Map**: https://sta.c64.org/cbm64mem.html
-- **PETSCII Codes**: https://sta.c64.org/cbm64pet.html
-- **VICE Manual**: https://vice-emu.sourceforge.io/vice_toc.html
 
-## Contact
-
-For questions or contributions, refer to the project repository or main documentation.
-
----
-
-**Last Updated**: 2026-01-29
-**Memory Usage**: 13.2 KB / 38 KB
-**Card Count**: 15
-**Enemy Count**: 3
-**Status**: Fully playable with visual effects

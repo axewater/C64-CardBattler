@@ -10,6 +10,7 @@
 #include "player.h"
 #include "random.h"
 #include "persistence.h"
+#include "music.h"
 
 int main(void) {
     /* Initialize UI system */
@@ -17,6 +18,9 @@ int main(void) {
 
     /* Initialize random number generator */
     random_init();
+
+    /* Initialize music system */
+    music_init();
 
     /* Initialize player */
     player_init();
@@ -29,6 +33,7 @@ int main(void) {
 
     /* Main game loop */
     while (gamestate_get() != STATE_QUIT) {
+        music_update();
         gamestate_update();
     }
 

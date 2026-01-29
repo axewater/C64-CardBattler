@@ -7,6 +7,7 @@
 #include "persistence.h"
 #include "random.h"
 #include "cards.h"
+#include "music.h"
 #include <conio.h>
 
 static GameState current_state = STATE_TITLE;
@@ -48,6 +49,7 @@ void gamestate_set(GameState new_state) {
 
 void state_title(void) {
     ui_clear_screen();
+    music_play(TRACK_MENU);
 
     ui_print_at_color(8, 5, "C64 CARD BATTLER", COLOR_YELLOW);
     ui_print_at_color(12, 7, "ROGUELIKE", COLOR_CYAN);
@@ -67,7 +69,9 @@ void state_menu(void) {
     ui_print_at(12, 12, "[Q] Quit");
 
     while (1) {
-        uint8_t key = ui_get_key();
+        uint8_t key;
+        music_update();  /* Keep music playing */
+        key = ui_get_key();
         if (key == 'n' || key == 'N') {
             gamestate_set(STATE_RUN_START);
             break;
@@ -80,6 +84,7 @@ void state_menu(void) {
 
 void state_run_start(void) {
     ui_clear_screen();
+    music_stop();
     ui_print_at_color(10, 10, "Starting Run...", COLOR_GREEN);
     ui_print_at(10, 12, "Init player...");
 
@@ -117,6 +122,9 @@ void state_combat(void) {
 
     /* Initialize combat */
     combat_init(enemy_id);
+
+    /* Start epic combat music */
+    music_play(TRACK_COMBAT);
 
     /* Run combat loop until resolution */
     while (combat_get_state() == COMBAT_PLAYER_TURN) {
@@ -197,6 +205,7 @@ void state_defeat(void) {
     ui_clear_screen();
     ui_print_at_color(10, 12, "You were defeated!", COLOR_RED);
     ui_wait_key();
+    music_play(TRACK_MENU);
     gamestate_set(STATE_MENU);
 }
 
@@ -218,5 +227,6 @@ void state_unlocks(void) {
     ui_print_at(8, 12, "New cards available!");
 
     ui_wait_key();
+    music_play(TRACK_MENU);
     gamestate_set(STATE_MENU);
 }
